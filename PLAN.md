@@ -171,26 +171,26 @@ Single uvicorn worker because APScheduler + browser pool + proxy pool are in-pro
 
 ## Implementation Order
 
-### Phase 1: Foundation
+### Phase 1: Foundation ✅ DONE
 - Project scaffolding (docker-compose, Dockerfiles, pyproject.toml, Next.js init)
 - Database: SQLAlchemy models, Alembic setup, initial migration
 - FastAPI app shell with health endpoint
 - Verify: `docker compose up` boots all 4 services
 
-### Phase 2: Core Backend
+### Phase 2: Core Backend ✅ DONE
 - Pydantic schemas
 - Lead CRUD API + search + CSV export
 - Scrape job API + report API
 - PostgreSQL trigram index for full-text search
 
-### Phase 3: Scraping Infrastructure
+### Phase 3: Scraping Infrastructure ✅ DONE
 - Proxy pool (rotation, health check, cooldown)
 - Browser pool (fingerprints, context lifecycle, stealth patches)
 - Human behavior simulation (delays, scroll, type)
 - CAPTCHA solver integration (2Captcha)
 - Abstract scraper interface + job manager
 
-### Phase 4: Source Scrapers (one at a time)
+### Phase 4: Source Scrapers ✅ DONE
 1. Google Jobs (least defended — validates full pipeline)
 2. Career page scraper + AI extraction service (Claude API)
 3. LinkedIn scraper (hardest — full anti-detection)
@@ -198,7 +198,7 @@ Single uvicorn worker because APScheduler + browser pool + proxy pool are in-pro
 5. Indeed + Glassdoor
 6. Fallback clients (Apify, Firecrawl)
 
-### Phase 5: Enrichment + Dedup
+### Phase 5: Enrichment + Dedup ⬅️ START HERE
 - Email/phone discovery (contact pages, pattern guessing, MX lookup)
 - Fuzzy dedup engine (thefuzz + domain matching)
 - Full pipeline integration test
