@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -11,9 +11,9 @@ router = APIRouter()
 
 
 @router.post("", response_model=ScrapeJobOut, status_code=201)
-async def trigger_job(data: ScrapeJobCreate, db: AsyncSession = Depends(get_db)):
+async def trigger_job(data: ScrapeJobCreate, request: Request, db: AsyncSession = Depends(get_db)):
     svc = JobService(db)
-    return await svc.create_job(data)
+    return await svc.create_job(data, request.app.state.scraper_manager)
 
 
 @router.get("", response_model=ScrapeJobListResponse)
@@ -35,7 +35,7 @@ async def get_job(job_id: UUID, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{job_id}/cancel")
-async def cancel_job(job_id: UUID, db: AsyncSession = Depends(get_db)):
+async def cancel_job(job_id: UUID, request: Request, db: AsyncSession = Depends(get_db)):
     svc = JobService(db)
-    await svc.cancel_job(job_id)
+    await svc.cancel_job(job_id, request.app.state.scraper_manager)
     return {"ok": True}
