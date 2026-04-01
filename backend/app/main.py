@@ -10,6 +10,12 @@ from app.scraper.browser_pool import BrowserPool
 from app.scraper.captcha_solver import CaptchaSolver
 from app.scraper.manager import ScraperJobManager
 from app.scraper.proxy_pool import ProxyPool
+from app.scraper.sources.career_page import CareerPageScraper
+from app.scraper.sources.glassdoor import GlassdoorScraper
+from app.scraper.sources.google_jobs import GoogleJobsScraper
+from app.scraper.sources.indeed import IndeedScraper
+from app.scraper.sources.linkedin import LinkedInScraper
+from app.scraper.sources.naukri import NaukriScraper
 
 logger = structlog.get_logger()
 
@@ -29,6 +35,12 @@ async def lifespan(app: FastAPI):
     captcha_solver = CaptchaSolver(settings.captcha_api_key)
 
     scraper_manager = ScraperJobManager(browser_pool, proxy_pool, captcha_solver)
+    scraper_manager.register_scraper("google_jobs", GoogleJobsScraper)
+    scraper_manager.register_scraper("career_page", CareerPageScraper)
+    scraper_manager.register_scraper("linkedin", LinkedInScraper)
+    scraper_manager.register_scraper("naukri", NaukriScraper)
+    scraper_manager.register_scraper("indeed", IndeedScraper)
+    scraper_manager.register_scraper("glassdoor", GlassdoorScraper)
     await scraper_manager.start()
 
     app.state.proxy_pool = proxy_pool

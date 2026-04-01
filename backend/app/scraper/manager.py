@@ -3,15 +3,18 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 import structlog
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from app.config import settings
 from app.db.engine import async_session
+from app.models.job_position import HiringPosition
+from app.models.lead import Lead, LeadEmail, LeadPhone
 from app.models.scrape_job import ScrapeJob
 from app.scraper.base import BaseScraper, ScraperResult
 from app.scraper.browser_pool import BrowserPool
 from app.scraper.captcha_solver import CaptchaSolver
 from app.scraper.proxy_pool import ProxyPool
+from app.services.ai_extraction import AIExtractionService
 
 logger = structlog.get_logger()
 
@@ -30,6 +33,7 @@ class ScraperJobManager:
         self._workers: list[asyncio.Task] = []
         self._cancel_events: dict[str, asyncio.Event] = {}
         self._registry: dict[str, type[BaseScraper]] = {}
+        self._ai_extraction = AIExtractionService()
 
     def register_scraper(self, source_name: str, scraper_class: type[BaseScraper]) -> None:
         self._registry[source_name] = scraper_class
@@ -112,16 +116,34 @@ class ScraperJobManager:
                 results.append(result)
                 await self._update_job_progress(job_id, pages_scraped)
 
-            # TODO: Phase 4+ will add AI extraction, enrichment, dedup here
+            # AI extraction → lead storage
+            leads_found = 0
+            leads_new = 0
+            for result in results:
+                extracted = await self._ai_extraction.extract_leads(
+                    result.raw_html, result.source_url, result.source_name
+                )
+                for company_data in extracted:
+                    leads_found += 1
+                    is_new = await self._store_lead(company_data, job_id)
+                    if is_new:
+                        leads_new += 1
+
             await self._update_job_status(
                 job_id,
                 "completed",
                 completed_at=datetime.now(timezone.utc),
                 pages_scraped=pages_scraped,
-                leads_found=0,
-                leads_new=0,
+                leads_found=leads_found,
+                leads_new=leads_new,
             )
-            logger.info("scraper_manager.job_completed", job_id=job_id_str, pages=pages_scraped)
+            logger.info(
+                "scraper_manager.job_completed",
+                job_id=job_id_str,
+                pages=pages_scraped,
+                leads_found=leads_found,
+                leads_new=leads_new,
+            )
 
         except Exception as e:
             logger.exception("scraper_manager.job_failed", job_id=job_id_str)
@@ -148,6 +170,86 @@ class ScraperJobManager:
                 await db.commit()
         except Exception:
             logger.exception("scraper_manager.status_update_failed", job_id=str(job_id))
+
+    async def _store_lead(self, data: dict, job_id: UUID) -> bool:
+        """Store extracted lead in DB. Returns True if it's a new lead."""
+        company_name = data.get("company_name", "").strip()
+        if not company_name:
+            return False
+
+        normalized_name = company_name.lower().strip()
+        location = data.get("location")
+        normalized_location = location.lower().strip() if location else None
+
+        try:
+            async with async_session() as db:
+                # Check for existing lead (dedup)
+                query = select(Lead).where(
+                    Lead.company_name_normalized == normalized_name
+                )
+                if normalized_location:
+                    query = query.where(Lead.location_normalized == normalized_location)
+                existing = (await db.execute(query)).scalar_one_or_none()
+
+                if existing:
+                    # Merge new data into existing lead
+                    for field in ("website", "industry", "company_size", "description"):
+                        new_val = data.get(field)
+                        if new_val and not getattr(existing, field):
+                            setattr(existing, field, new_val)
+                    await db.commit()
+                    return False
+
+                lead = Lead(
+                    company_name=company_name,
+                    company_name_normalized=normalized_name,
+                    location=location,
+                    location_normalized=normalized_location,
+                    website=data.get("website"),
+                    industry=data.get("industry"),
+                    company_size=data.get("company_size"),
+                    description=data.get("description"),
+                    source=data.get("source", "unknown"),
+                    source_url=data.get("source_url", ""),
+                    confidence_score=data.get("confidence_score"),
+                    scrape_job_id=job_id,
+                )
+                db.add(lead)
+                await db.flush()
+
+                for email_data in data.get("emails", []):
+                    db.add(LeadEmail(
+                        lead_id=lead.id,
+                        email=email_data["email"],
+                        email_type=email_data.get("email_type"),
+                        source="scraped",
+                    ))
+
+                for phone_data in data.get("phones", []):
+                    db.add(LeadPhone(
+                        lead_id=lead.id,
+                        phone=phone_data["phone"],
+                        phone_type=phone_data.get("phone_type"),
+                    ))
+
+                for pos_data in data.get("positions", []):
+                    db.add(HiringPosition(
+                        lead_id=lead.id,
+                        title=pos_data.get("title", "Unknown"),
+                        department=pos_data.get("department"),
+                        location=pos_data.get("location"),
+                        job_type=pos_data.get("job_type"),
+                        experience_level=pos_data.get("experience_level"),
+                        salary_range=pos_data.get("salary_range"),
+                        source_url=pos_data.get("source_url"),
+                    ))
+
+                await db.commit()
+                return True
+
+        except Exception:
+            logger.exception("scraper_manager.store_lead_failed", company=company_name)
+            return False
 
     async def _update_job_progress(self, job_id: UUID, pages_scraped: int) -> None:
         try:
