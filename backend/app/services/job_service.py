@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -7,12 +10,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.scrape_job import ScrapeJob
 from app.schemas.scrape_job import ScrapeJobCreate
 
+if TYPE_CHECKING:
+    from app.scraper.manager import ScraperJobManager
+
 
 class JobService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create_job(self, data: ScrapeJobCreate) -> ScrapeJob:
+    async def create_job(self, data: ScrapeJobCreate, manager: ScraperJobManager) -> ScrapeJob:
+        if not manager.has_scraper(data.source):
+            available = manager.registered_sources
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown source '{data.source}'. Available: {available}",
+            )
+
         job = ScrapeJob(
             source=data.source,
             keywords=data.keywords,
@@ -24,7 +37,14 @@ class JobService:
         self.db.add(job)
         await self.db.commit()
         await self.db.refresh(job)
-        # TODO: submit to ScraperJobManager queue
+
+        await manager.submit(
+            job_id=job.id,
+            source=job.source,
+            keywords=job.keywords or "",
+            location=job.location_filter,
+            max_pages=job.total_pages or 10,
+        )
         return job
 
     async def list_jobs(
@@ -47,9 +67,10 @@ class JobService:
             raise HTTPException(status_code=404, detail="Job not found")
         return job
 
-    async def cancel_job(self, job_id: UUID) -> None:
+    async def cancel_job(self, job_id: UUID, manager: ScraperJobManager) -> None:
         job = await self.get_job(job_id)
         if job.status not in ("pending", "running"):
             raise HTTPException(status_code=400, detail="Job cannot be cancelled")
         job.status = "cancelled"
         await self.db.commit()
+        await manager.cancel(job_id)
