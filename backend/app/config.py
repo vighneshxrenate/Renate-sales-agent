@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://renate:changeme@db:5432/renate_sales"
 
-    anthropic_api_key: str = ""
+    openai_api_key: str = ""
 
     playwright_ws_endpoint: str = "ws://playwright-browser:3000"
 
@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # Fallback APIs
     apify_api_key: str = ""
     firecrawl_api_key: str = ""
+
+    # Enrichment
+    apollo_api_key: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

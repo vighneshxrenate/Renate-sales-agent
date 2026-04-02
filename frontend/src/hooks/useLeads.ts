@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import type { LeadListResponse, Lead, LeadStats } from "@/lib/types";
 
@@ -36,5 +36,27 @@ export function useLeadStats() {
   return useQuery({
     queryKey: ["lead-stats"],
     queryFn: () => apiFetch<LeadStats>("/leads/stats"),
+  });
+}
+
+export function useUpdateLead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: { status?: string; company_name?: string; location?: string };
+    }) =>
+      apiFetch<Lead>(`/leads/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["lead", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-stats"] });
+    },
   });
 }

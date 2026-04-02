@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { LayoutDashboard, Building2, Zap, FileBarChart } from "lucide-react";
 
 const navItems = [
-  { href: "/", label: "Dashboard", icon: "📊" },
-  { href: "/leads", label: "Leads", icon: "🏢" },
-  { href: "/jobs", label: "Scrape Jobs", icon: "⚡" },
-  { href: "/reports", label: "Reports", icon: "📋" },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/leads", label: "Leads", icon: Building2 },
+  { href: "/jobs", label: "Scrape Jobs", icon: Zap },
+  { href: "/reports", label: "Reports", icon: FileBarChart },
 ];
 
 export function Sidebar() {
@@ -28,6 +29,7 @@ export function Sidebar() {
             item.href === "/"
               ? pathname === "/"
               : pathname.startsWith(item.href);
+          const Icon = item.icon;
           return (
             <Link
               key={item.href}
@@ -39,7 +41,7 @@ export function Sidebar() {
                   : "text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
               )}
             >
-              <span>{item.icon}</span>
+              <Icon size={18} />
               {item.label}
             </Link>
           );
