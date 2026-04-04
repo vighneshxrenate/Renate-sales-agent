@@ -3,6 +3,7 @@ import random
 import re
 from urllib.parse import quote_plus
 
+import aiohttp
 import structlog
 from playwright.async_api import BrowserContext
 
@@ -21,14 +22,10 @@ JUNK_DOMAINS = {
 }
 
 FUNCTIONAL_MAILBOXES = [
-    ("hr", "hr"),
-    ("recruitment", "hr"),
-    ("careers", "hr"),
-    ("hiring", "hr"),
-    ("talent", "hr"),
-    ("jobs", "hr"),
-    ("people", "hr"),
-    ("humanresources", "hr"),
+    ("hr", "hr"), ("recruitment", "hr"), ("careers", "hr"),
+    ("hiring", "hr"), ("talent", "hr"), ("jobs", "hr"),
+    ("people", "hr"), ("humanresources", "hr"),
+    ("placement", "hr"), ("joinus", "hr"),
 ]
 
 GOOGLE_CONSENT_COOKIES = [
@@ -36,20 +33,35 @@ GOOGLE_CONSENT_COOKIES = [
 ]
 
 
+def _is_valid_discovered_email(email: str, domain: str | None) -> bool:
+    email_lower = email.lower()
+    local = email_lower.split("@")[0]
+    email_domain = email_lower.split("@")[1]
+
+    if email_domain in JUNK_DOMAINS:
+        return False
+    if len(local) < 3:
+        return False
+    if "%" in email or "+" in email or email.startswith(".") or "u003e" in email_lower:
+        return False
+    if local in ("name", "email", "your", "user", "test", "info", "example", "abc"):
+        return False
+
+    is_company = domain and domain in email_domain
+    is_personal = email_domain in ("gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "rediffmail.com")
+    return is_company or is_personal
+
+
 class EmailDiscoveryService:
-    """Free email discovery via Google dorking + SMTP verification."""
+    """Free email discovery via Google/DuckDuckGo dorking + SMTP verification."""
 
     async def discover_emails(
-        self,
-        company_name: str,
-        domain: str | None,
-        browser_pool: BrowserPool,
+        self, company_name: str, domain: str | None, browser_pool: BrowserPool,
     ) -> list[tuple[str, str, str]]:
-        """Returns list of (email, type, source)."""
         results: list[tuple[str, str, str]] = []
         seen: set[str] = set()
 
-        # 1. SMTP-verify functional mailboxes (hr@, careers@, etc.)
+        # 1. SMTP-verify functional mailboxes
         if domain:
             has_mx = await verify_domain_has_mx(domain)
             if has_mx:
@@ -59,66 +71,106 @@ class EmailDiscoveryService:
                         results.append((email, etype, "smtp_verified"))
                         seen.add(email.lower())
 
-        # 2. Google dork for leaked recruiter emails
+        # 2. DuckDuckGo dork (no CAPTCHAs, always works)
         if browser_pool:
-            dorked = await self._google_dork_emails(company_name, domain, browser_pool)
-            for email, etype in dorked:
-                if email.lower() not in seen:
+            ddg_emails = await self._duckduckgo_dork_emails(company_name, domain, browser_pool)
+            for email, etype in ddg_emails:
+                if email.lower() not in seen and _is_valid_discovered_email(email, domain):
+                    results.append((email, etype, "duckduckgo"))
+                    seen.add(email.lower())
+
+        # 3. Google dork fallback (may get blocked)
+        if len(results) < 2 and browser_pool:
+            google_emails = await self._google_dork_emails(company_name, domain, browser_pool)
+            for email, etype in google_emails:
+                if email.lower() not in seen and _is_valid_discovered_email(email, domain):
                     results.append((email, etype, "google_dork"))
                     seen.add(email.lower())
 
         if results:
-            logger.info(
-                "email_discovery_done",
-                company=company_name,
-                domain=domain,
-                found=len(results),
-            )
+            logger.info("email_discovery_done", company=company_name, domain=domain, found=len(results))
 
         return results
 
     async def _check_functional_mailboxes(self, domain: str) -> list[tuple[str, str]]:
-        """Check if common HR mailboxes exist via SMTP."""
         verified: list[tuple[str, str]] = []
 
-        # First check if the domain is a catch-all (accepts any address)
+        # Check catch-all first
         random_addr = f"xyznonexistent{random.randint(10000,99999)}@{domain}"
         is_catchall = await verify_email_smtp(random_addr)
         if is_catchall:
-            logger.warning("smtp_catchall_domain", domain=domain)
-            return []  # Can't verify individual addresses
+            return []
 
-        tasks = []
-        for prefix, etype in FUNCTIONAL_MAILBOXES:
+        # Check all in parallel
+        async def check_one(prefix: str, etype: str) -> tuple[str, str] | None:
             email = f"{prefix}@{domain}"
-            tasks.append((email, etype, verify_email_smtp(email)))
-
-        for email, etype, coro in tasks:
             try:
-                exists = await coro
+                exists = await verify_email_smtp(email)
                 if exists:
-                    verified.append((email, etype))
-                    logger.warning("functional_mailbox_verified", email=email)
+                    return (email, etype)
             except Exception:
                 pass
+            return None
+
+        tasks = [check_one(prefix, etype) for prefix, etype in FUNCTIONAL_MAILBOXES]
+        results = await asyncio.gather(*tasks)
+        for r in results:
+            if r:
+                verified.append(r)
 
         return verified
 
-    async def _google_dork_emails(
-        self,
-        company_name: str,
-        domain: str | None,
-        browser_pool: BrowserPool,
+    async def _duckduckgo_dork_emails(
+        self, company_name: str, domain: str | None, browser_pool: BrowserPool,
     ) -> list[tuple[str, str]]:
-        """Search Google for recruiter/HR emails mentioned on web pages."""
+        """DuckDuckGo HTML search — no CAPTCHAs, always works."""
         emails: list[tuple[str, str]] = []
         seen: set[str] = set()
 
         queries = []
         if domain:
             queries.append(f'"@{domain}" recruiter OR hr OR hiring OR talent')
-            queries.append(f'site:naukri.com "{company_name}" "@{domain}"')
-        queries.append(f'"{company_name}" India recruiter email contact')
+        queries.append(f'"{company_name}" India recruiter email hr contact')
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                for query in queries[:2]:
+                    url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+                    async with session.get(
+                        url,
+                        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as resp:
+                        if resp.status != 200:
+                            continue
+                        html = await resp.text()
+
+                    for email in EMAIL_RE.findall(html):
+                        email_lower = email.lower()
+                        if email_lower in seen or not _is_valid_discovered_email(email, domain):
+                            continue
+                        seen.add(email_lower)
+                        local = email_lower.split("@")[0]
+                        hr_kw = ("hr", "recruit", "talent", "hiring", "career", "people")
+                        etype = "hr" if any(kw in local for kw in hr_kw) else "personal"
+                        emails.append((email, etype))
+
+                    await asyncio.sleep(1)
+        except Exception:
+            logger.warning("duckduckgo_dork_failed", company=company_name)
+
+        return emails[:10]
+
+    async def _google_dork_emails(
+        self, company_name: str, domain: str | None, browser_pool: BrowserPool,
+    ) -> list[tuple[str, str]]:
+        emails: list[tuple[str, str]] = []
+        seen: set[str] = set()
+
+        queries = []
+        if domain:
+            queries.append(f'"@{domain}" recruiter OR hr OR hiring OR talent')
+        queries.append(f'site:naukri.com "{company_name}" email contact')
 
         ctx = await browser_pool.acquire(stealth_level="minimal", proxy=None)
         try:
@@ -128,7 +180,7 @@ class EmailDiscoveryService:
                 "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
             )
 
-            for query in queries[:2]:  # Limit to 2 queries to avoid captcha
+            for query in queries[:2]:
                 try:
                     url = f"https://www.google.co.in/search?q={quote_plus(query)}&num=20&hl=en"
                     await page.goto(url, wait_until="domcontentloaded", timeout=12000)
@@ -136,45 +188,21 @@ class EmailDiscoveryService:
 
                     text = await page.inner_text("body")
                     if "unusual traffic" in text.lower():
-                        logger.warning("google_dork_blocked")
                         break
 
                     html = await page.content()
-                    found = EMAIL_RE.findall(html + " " + text)
-
-                    for email in found:
+                    for email in EMAIL_RE.findall(html + " " + text):
                         email_lower = email.lower()
-                        email_domain = email_lower.split("@")[1]
-
-                        if email_domain in JUNK_DOMAINS:
+                        if email_lower in seen or not _is_valid_discovered_email(email, domain):
                             continue
-                        if email_lower in seen:
-                            continue
-
-                        # Only keep emails from the company domain or personal emails
-                        # Skip junk emails
-                        local_part = email_lower.split("@")[0]
-                        if ("%" in email or "+" in email or email.startswith(".")
-                                or "u003e" in email_lower or len(local_part) < 3
-                                or local_part in ("name", "email", "your", "user", "test", "info")):
-                            continue
-
-                        is_company = domain and domain in email_domain
-                        is_personal = email_domain in ("gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "rediffmail.com")
-
-                        if not is_company and not is_personal:
-                            continue
-
                         seen.add(email_lower)
-                        local_part = email_lower.split("@")[0]
-                        hr_keywords = ("hr", "recruit", "talent", "hiring", "career", "people")
-                        etype = "hr" if any(kw in local_part for kw in hr_keywords) else "personal"
+                        local = email_lower.split("@")[0]
+                        hr_kw = ("hr", "recruit", "talent", "hiring", "career", "people")
+                        etype = "hr" if any(kw in local for kw in hr_kw) else "personal"
                         emails.append((email, etype))
 
                     await asyncio.sleep(random.uniform(2, 4))
-
                 except Exception:
-                    logger.warning("google_dork_query_failed", query=query[:50])
                     continue
 
             await page.close()

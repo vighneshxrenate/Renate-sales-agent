@@ -31,8 +31,9 @@ class Settings(BaseSettings):
     apify_api_key: str = ""
     firecrawl_api_key: str = ""
 
-    # Enrichment (Hunter.io)
+    # Enrichment
     hunter_api_key: str = ""
+    apollo_api_key: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
