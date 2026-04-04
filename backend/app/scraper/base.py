@@ -16,6 +16,7 @@ class ScraperResult:
     source: str
     page_number: int = 0
     metadata: dict = field(default_factory=dict)
+    structured_leads: list | None = None  # Pre-extracted leads — skips LLM
 
 
 class AbstractScraper(ABC):

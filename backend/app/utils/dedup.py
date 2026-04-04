@@ -3,6 +3,7 @@ from urllib.parse import urlparse
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from thefuzz import fuzz
 
 from app.models.lead import Lead, LeadEmail, LeadPhone
@@ -73,8 +74,14 @@ async def find_duplicate(
     location_normalized: str | None,
     website: str | None,
 ) -> Lead | None:
+    eager_opts = [
+        selectinload(Lead.emails),
+        selectinload(Lead.phones),
+        selectinload(Lead.positions),
+    ]
+
     # 1. Exact match on normalized name + location
-    query = select(Lead).where(
+    query = select(Lead).options(*eager_opts).where(
         Lead.company_name_normalized == company_name_normalized,
         Lead.merged_into_id.is_(None),
     )
@@ -90,7 +97,7 @@ async def find_duplicate(
     domain = extract_domain(website)
     if domain:
         result = await db.execute(
-            select(Lead).where(
+            select(Lead).options(*eager_opts).where(
                 Lead.website.ilike(f"%{domain}%"),
                 Lead.merged_into_id.is_(None),
             ).limit(1)
@@ -101,7 +108,7 @@ async def find_duplicate(
 
     # 3. Fuzzy match on name
     candidates = await db.execute(
-        select(Lead).where(Lead.merged_into_id.is_(None)).limit(500)
+        select(Lead).options(*eager_opts).where(Lead.merged_into_id.is_(None)).limit(500)
     )
     for lead in candidates.scalars():
         score = fuzz.token_sort_ratio(company_name_normalized, lead.company_name_normalized)

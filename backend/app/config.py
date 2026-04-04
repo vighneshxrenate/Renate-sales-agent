@@ -8,11 +8,8 @@ class Settings(BaseSettings):
 
     playwright_ws_endpoint: str = "ws://playwright-browser:3000"
 
-    # Proxy
-    proxy_host: str = ""
-    proxy_port: int = 10001
-    proxy_username: str = ""
-    proxy_password: str = ""
+    # Proxy (comma-separated, format: host:port:username:password)
+    proxy_list: str = ""
 
     # CAPTCHA
     captcha_api_key: str = ""
@@ -34,8 +31,8 @@ class Settings(BaseSettings):
     apify_api_key: str = ""
     firecrawl_api_key: str = ""
 
-    # Enrichment
-    apollo_api_key: str = ""
+    # Enrichment (Hunter.io)
+    hunter_api_key: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

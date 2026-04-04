@@ -35,7 +35,13 @@ EMAIL_REGEX = re.compile(
 )
 
 PHONE_REGEX = re.compile(
-    r"(?:\+91[\s-]?)?(?:\(?0?\d{2,4}\)?[\s.-]?)?\d{6,10}",
+    r"(?:"
+    r"(?:\+91[\s\-]?)?(?:\(?0\d{2,4}\)?[\s\-.]?)\d{3,4}[\s\-.]?\d{3,4}"
+    r"|1800[\s\-]?\d{3}[\s\-]?\d{3,4}"
+    r"|\+91[\s\-]?\d{4,5}[\s\-]?\d{3,4}[\s\-]?\d{3,4}"
+    r"|\+\d{1,3}[\s\-]?\(?\d{1,4}\)?[\s\-]?\d{3,4}[\s\-]?\d{3,4}"
+    r"|(?<!\d)\d{10}(?!\d)"
+    r")",
 )
 
 EXCLUDE_EMAIL_PATTERNS = re.compile(
@@ -75,7 +81,17 @@ def extract_phones_from_text(text: str) -> list[tuple[str, str]]:
         cleaned = re.sub(r"[\s.()\-]", "", phone)
         if len(cleaned) < 8 or cleaned in seen:
             continue
+        digits = re.sub(r"\D", "", cleaned)
+        if len(set(digits)) <= 3:
+            continue
         seen.add(cleaned)
-        phone_type = "mobile" if cleaned.startswith("+91") or len(cleaned) == 10 else "main"
-        results.append((phone, phone_type))
+        if cleaned.startswith("1800"):
+            phone_type = "toll_free"
+        elif cleaned.startswith("+91") and len(cleaned) == 13:
+            phone_type = "mobile"
+        elif len(cleaned) == 10 and cleaned[0] in "6789":
+            phone_type = "mobile"
+        else:
+            phone_type = "main"
+        results.append((phone.strip(), phone_type))
     return results

@@ -51,7 +51,7 @@ class BrowserPool:
 
     async def initialize(self) -> None:
         self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.connect_over_cdp(
+        self._browser = await self._playwright.chromium.connect(
             settings.playwright_ws_endpoint
         )
         logger.info("browser_pool_initialized", endpoint=settings.playwright_ws_endpoint)

@@ -104,9 +104,12 @@ class ScraperJobManager:
                     await db.commit()
 
                     try:
-                        extracted = await self._ai_service.extract_leads(
-                            result.raw_html, result.source, result.url
-                        )
+                        if result.structured_leads is not None:
+                            extracted = result.structured_leads
+                        else:
+                            extracted = await self._ai_service.extract_leads(
+                                result.raw_html, result.source, result.url
+                            )
                     except Exception:
                         logger.exception("ai_extraction_failed", url=result.url)
                         continue

@@ -55,18 +55,27 @@ class ProxyPool:
                 for p in db_proxies
             ]
 
-        if settings.proxy_host and settings.proxy_username:
-            self._proxies.append({
-                "id": "smartproxy-rotating",
-                "server": f"http://{settings.proxy_host}:{settings.proxy_port}",
-                "username": settings.proxy_username,
-                "password": settings.proxy_password,
-                "provider": "smartproxy",
-                "fail_count": 0,
-                "success_count": 0,
-                "cooldown_until": None,
-                "last_used_at": None,
-            })
+        if settings.proxy_list:
+            for i, entry in enumerate(settings.proxy_list.split(",")):
+                entry = entry.strip()
+                if not entry:
+                    continue
+                parts = entry.split(":")
+                if len(parts) != 4:
+                    logger.warning("invalid_proxy_entry", entry=entry)
+                    continue
+                host, port, username, password = parts
+                self._proxies.append({
+                    "id": f"proxy-cheap-{i}",
+                    "server": f"http://{host}:{port}",
+                    "username": username,
+                    "password": password,
+                    "provider": "proxy-cheap",
+                    "fail_count": 0,
+                    "success_count": 0,
+                    "cooldown_until": None,
+                    "last_used_at": None,
+                })
 
         logger.info("proxy_pool_initialized", count=len(self._proxies))
 
@@ -85,7 +94,7 @@ class ProxyPool:
             return None
 
         if source == "naukri":
-            indian = [p for p in available if p.get("provider") in ("smartproxy", "indian_residential")]
+            indian = [p for p in available if p.get("provider") in ("proxy-cheap", "indian_residential")]
             if indian:
                 available = indian
 

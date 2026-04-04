@@ -76,7 +76,7 @@ EXTRACTION_FUNCTION = {
 }
 
 SOURCE_PROMPTS = {
-    "google_jobs": "Extract company and job listing data from these Google Jobs search results.",
+    "google_jobs": "Extract company and job listing data from these Google Jobs search results. Each job listing has: job title, company name, location (city, state), and source (via X). Group multiple positions under the same company. Only extract real company names — never use placeholders like 'Company A'.",
     "linkedin": "Extract company profiles and job listing data from these LinkedIn job search results.",
     "naukri": "Extract company and job listing data from these Naukri.com search results.",
     "indeed": "Extract company and job listing data from these Indeed job search results.",
