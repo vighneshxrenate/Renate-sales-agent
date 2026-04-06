@@ -1,9 +1,11 @@
-FROM mcr.microsoft.com/playwright:v1.52.0-noble
+FROM mcr.microsoft.com/playwright:v1.58.0-noble
 
 WORKDIR /app
 
-RUN npm init -y && npm install playwright@1.52.0
+RUN npm init -y && npm install playwright@1.58.0
+
+COPY server.js .
 
 EXPOSE 3000
 
-CMD ["npx", "playwright", "launch-server", "--browser", "chromium", "--host", "0.0.0.0", "--port", "3000"]
+CMD ["node", "server.js"]

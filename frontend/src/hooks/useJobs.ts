@@ -49,3 +49,15 @@ export function useTriggerJob() {
     },
   });
 }
+
+export function useCancelJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (jobId: string) =>
+      apiFetch<{ ok: boolean }>(`/jobs/${jobId}/cancel`, { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["job"] });
+    },
+  });
+}

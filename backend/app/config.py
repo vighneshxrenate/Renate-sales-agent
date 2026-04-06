@@ -4,15 +4,12 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://renate:changeme@db:5432/renate_sales"
 
-    anthropic_api_key: str = ""
+    openai_api_key: str = ""
 
     playwright_ws_endpoint: str = "ws://playwright-browser:3000"
 
-    # Proxy
-    proxy_host: str = ""
-    proxy_port: int = 10001
-    proxy_username: str = ""
-    proxy_password: str = ""
+    # Proxy (comma-separated, format: host:port:username:password)
+    proxy_list: str = ""
 
     # CAPTCHA
     captcha_api_key: str = ""
@@ -33,6 +30,10 @@ class Settings(BaseSettings):
     # Fallback APIs
     apify_api_key: str = ""
     firecrawl_api_key: str = ""
+
+    # Enrichment
+    hunter_api_key: str = ""
+    apollo_api_key: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

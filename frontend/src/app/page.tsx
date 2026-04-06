@@ -2,26 +2,19 @@
 
 import { useLeadStats } from "@/hooks/useLeads";
 import { useJobs } from "@/hooks/useJobs";
-
-function StatCard({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: string | number;
-  sub?: string;
-}) {
-  return (
-    <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
-      <p className="text-sm text-[var(--muted-foreground)]">{label}</p>
-      <p className="text-3xl font-bold mt-1">{value}</p>
-      {sub && (
-        <p className="text-xs text-[var(--muted-foreground)] mt-1">{sub}</p>
-      )}
-    </div>
-  );
-}
+import { StatCard, Card } from "@/components/ui/Card";
+import { SOURCE_COLORS } from "@/lib/constants";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  PieChart,
+  Pie,
+} from "recharts";
 
 export default function DashboardPage() {
   const { data: stats, isLoading: statsLoading } = useLeadStats();
@@ -29,6 +22,18 @@ export default function DashboardPage() {
 
   const runningJobs =
     jobsData?.jobs.filter((j) => j.status === "running").length ?? 0;
+
+  const sourceData = Object.entries(stats?.by_source ?? {}).map(
+    ([name, value]) => ({
+      name: name.replace("_", " "),
+      value,
+      fill: SOURCE_COLORS[name] || "var(--primary)",
+    })
+  );
+
+  const statusData = Object.entries(stats?.by_status ?? {}).map(
+    ([name, value]) => ({ name, value })
+  );
 
   return (
     <div>
@@ -46,7 +51,9 @@ export default function DashboardPage() {
         />
         <StatCard
           label="Sources"
-          value={statsLoading ? "..." : Object.keys(stats?.by_source ?? {}).length}
+          value={
+            statsLoading ? "..." : Object.keys(stats?.by_source ?? {}).length
+          }
         />
         <StatCard
           label="New Leads"
@@ -57,41 +64,77 @@ export default function DashboardPage() {
 
       {stats && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
+          <Card className="p-5">
             <h3 className="font-semibold mb-4">Leads by Source</h3>
-            {Object.entries(stats.by_source).length === 0 ? (
+            {sourceData.length === 0 ? (
               <p className="text-[var(--muted-foreground)] text-sm">
                 No leads yet. Trigger a scrape job to get started.
               </p>
             ) : (
-              <div className="space-y-3">
-                {Object.entries(stats.by_source).map(([source, count]) => (
-                  <div key={source} className="flex items-center justify-between">
-                    <span className="text-sm capitalize">{source}</span>
-                    <span className="text-sm font-mono">{count}</span>
-                  </div>
-                ))}
-              </div>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={sourceData} layout="vertical">
+                  <XAxis type="number" stroke="var(--muted-foreground)" fontSize={12} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={90}
+                    stroke="var(--muted-foreground)"
+                    fontSize={12}
+                    style={{ textTransform: "capitalize" }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--card)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                    }}
+                  />
+                  <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                    {sourceData.map((entry, i) => (
+                      <Cell key={i} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             )}
-          </div>
+          </Card>
 
-          <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
+          <Card className="p-5">
             <h3 className="font-semibold mb-4">Leads by Status</h3>
-            {Object.entries(stats.by_status).length === 0 ? (
+            {statusData.length === 0 ? (
               <p className="text-[var(--muted-foreground)] text-sm">
                 No leads yet.
               </p>
             ) : (
-              <div className="space-y-3">
-                {Object.entries(stats.by_status).map(([status, count]) => (
-                  <div key={status} className="flex items-center justify-between">
-                    <span className="text-sm capitalize">{status}</span>
-                    <span className="text-sm font-mono">{count}</span>
-                  </div>
-                ))}
-              </div>
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={3}
+                    label={({ name, value }) => `${name}: ${value}`}
+                  >
+                    <Cell fill="#3b82f6" />
+                    <Cell fill="#f59e0b" />
+                    <Cell fill="#22c55e" />
+                    <Cell fill="#ef4444" />
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--card)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
             )}
-          </div>
+          </Card>
         </div>
       )}
     </div>

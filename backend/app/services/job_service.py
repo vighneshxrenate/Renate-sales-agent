@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,8 +9,9 @@ from app.schemas.scrape_job import ScrapeJobCreate
 
 
 class JobService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, request: Request | None = None):
         self.db = db
+        self._request = request
 
     async def create_job(self, data: ScrapeJobCreate) -> ScrapeJob:
         job = ScrapeJob(
@@ -24,7 +25,13 @@ class JobService:
         self.db.add(job)
         await self.db.commit()
         await self.db.refresh(job)
-        # TODO: submit to ScraperJobManager queue
+
+        # Submit to scraper manager if available
+        if self._request and hasattr(self._request.app.state, "scraper_manager"):
+            manager = self._request.app.state.scraper_manager
+            if manager:
+                await manager.submit(job.id)
+
         return job
 
     async def list_jobs(

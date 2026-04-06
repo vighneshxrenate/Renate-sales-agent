@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -11,8 +11,8 @@ router = APIRouter()
 
 
 @router.post("", response_model=ScrapeJobOut, status_code=201)
-async def trigger_job(data: ScrapeJobCreate, db: AsyncSession = Depends(get_db)):
-    svc = JobService(db)
+async def trigger_job(data: ScrapeJobCreate, request: Request, db: AsyncSession = Depends(get_db)):
+    svc = JobService(db, request=request)
     return await svc.create_job(data)
 
 

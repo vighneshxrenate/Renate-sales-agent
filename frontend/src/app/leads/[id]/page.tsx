@@ -2,8 +2,15 @@
 
 import { use } from "react";
 import Link from "next/link";
-import { useLead } from "@/hooks/useLeads";
+import { useLead, useUpdateLead } from "@/hooks/useLeads";
 import { formatDateTime } from "@/lib/utils";
+import { Card } from "@/components/ui/Card";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import {
+  STATUSES,
+  EMAIL_SOURCE_LABELS,
+  EMAIL_TYPE_LABELS,
+} from "@/lib/constants";
 
 export default function LeadDetailPage({
   params,
@@ -12,8 +19,10 @@ export default function LeadDetailPage({
 }) {
   const { id } = use(params);
   const { data: lead, isLoading } = useLead(id);
+  const updateLead = useUpdateLead();
 
-  if (isLoading) return <p className="text-[var(--muted-foreground)]">Loading...</p>;
+  if (isLoading)
+    return <p className="text-[var(--muted-foreground)]">Loading...</p>;
   if (!lead) return <p>Lead not found</p>;
 
   return (
@@ -30,24 +39,26 @@ export default function LeadDetailPage({
           <h2 className="text-2xl font-bold">{lead.company_name}</h2>
           <p className="text-[var(--muted-foreground)]">
             {lead.location || "Location unknown"} &middot;{" "}
-            <span className="capitalize">{lead.source}</span>
+            <span className="capitalize">{lead.source.replace("_", " ")}</span>
           </p>
         </div>
-        <span
-          className={`px-3 py-1 rounded text-sm font-medium ${
-            lead.status === "new"
-              ? "bg-blue-500/20 text-blue-400"
-              : lead.status === "qualified"
-                ? "bg-green-500/20 text-green-400"
-                : "bg-yellow-500/20 text-yellow-400"
-          }`}
+        <select
+          value={lead.status}
+          onChange={(e) =>
+            updateLead.mutate({ id: lead.id, data: { status: e.target.value } })
+          }
+          className="bg-[var(--muted)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-sm"
         >
-          {lead.status}
-        </span>
+          {STATUSES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
+        <Card className="p-5">
           <h3 className="font-semibold mb-3">Company Info</h3>
           <dl className="space-y-2 text-sm">
             {lead.website && (
@@ -77,6 +88,12 @@ export default function LeadDetailPage({
                 <dd>{lead.company_size}</dd>
               </>
             )}
+            {lead.confidence_score != null && (
+              <>
+                <dt className="text-[var(--muted-foreground)]">Confidence</dt>
+                <dd>{Math.round(lead.confidence_score * 100)}%</dd>
+              </>
+            )}
             <dt className="text-[var(--muted-foreground)]">Source URL</dt>
             <dd>
               <a
@@ -91,9 +108,9 @@ export default function LeadDetailPage({
             <dt className="text-[var(--muted-foreground)]">Created</dt>
             <dd>{formatDateTime(lead.created_at)}</dd>
           </dl>
-        </div>
+        </Card>
 
-        <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
+        <Card className="p-5">
           <h3 className="font-semibold mb-3">
             Emails ({lead.emails.length})
           </h3>
@@ -111,16 +128,30 @@ export default function LeadDetailPage({
                   >
                     {e.email}
                   </a>
-                  <span className="text-[var(--muted-foreground)] ml-2">
-                    {e.email_type} &middot; {e.verified ? "verified" : "unverified"}
-                  </span>
+                  <div className="flex gap-2 mt-0.5">
+                    {e.email_type && (
+                      <span className="text-xs bg-[var(--muted)] px-1.5 py-0.5 rounded">
+                        {EMAIL_TYPE_LABELS[e.email_type] || e.email_type}
+                      </span>
+                    )}
+                    {e.source && (
+                      <span className="text-xs bg-[var(--muted)] px-1.5 py-0.5 rounded">
+                        {EMAIL_SOURCE_LABELS[e.source] || e.source}
+                      </span>
+                    )}
+                    <span
+                      className={`text-xs ${e.verified ? "text-green-400" : "text-[var(--muted-foreground)]"}`}
+                    >
+                      {e.verified ? "verified" : "unverified"}
+                    </span>
+                  </div>
                 </li>
               ))}
             </ul>
           )}
-        </div>
+        </Card>
 
-        <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
+        <Card className="p-5">
           <h3 className="font-semibold mb-3">
             Phones ({lead.phones.length})
           </h3>
@@ -139,7 +170,7 @@ export default function LeadDetailPage({
                     {p.phone}
                   </a>
                   {p.phone_type && (
-                    <span className="text-[var(--muted-foreground)] ml-2">
+                    <span className="text-[var(--muted-foreground)] ml-2 text-xs">
                       {p.phone_type}
                     </span>
                   )}
@@ -147,10 +178,10 @@ export default function LeadDetailPage({
               ))}
             </ul>
           )}
-        </div>
+        </Card>
       </div>
 
-      <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
+      <Card className="p-5">
         <h3 className="font-semibold mb-3">
           Hiring Positions ({lead.positions.length})
         </h3>
@@ -182,7 +213,7 @@ export default function LeadDetailPage({
             ))}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

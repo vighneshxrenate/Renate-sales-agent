@@ -12,7 +12,7 @@ dependencies = [
     "pydantic-settings>=2.7",
     "playwright>=1.52",
     "playwright-stealth>=1.0.6",
-    "anthropic>=0.52",
+    "openai>=1.40",
     "apscheduler>=3.10,<4.0",
     "thefuzz[speedup]>=0.22",
     "dnspython>=2.7",
@@ -22,6 +22,8 @@ dependencies = [
     "structlog>=24.4",
     "tenacity>=9.0",
     "python-dotenv>=1.0",
+    "curl-cffi>=0.7",
+    "selectolax>=0.3",
 ]
 
 [project.optional-dependencies]

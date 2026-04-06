@@ -1,15 +1,21 @@
+export type EmailType = "generic" | "personal" | "hr" | "careers";
+export type EmailSource = "scraped" | "pattern_guess" | "dns" | "apollo";
+export type LeadStatus = "new" | "contacted" | "qualified" | "disqualified";
+export type JobStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+export type PhoneType = "main" | "hr" | "mobile";
+
 export interface LeadEmail {
   id: string;
   email: string;
-  email_type: string | null;
-  source: string | null;
+  email_type: EmailType | null;
+  source: EmailSource | null;
   verified: boolean;
 }
 
 export interface LeadPhone {
   id: string;
   phone: string;
-  phone_type: string | null;
+  phone_type: PhoneType | null;
 }
 
 export interface HiringPosition {
@@ -35,7 +41,7 @@ export interface Lead {
   source: string;
   source_url: string;
   confidence_score: number | null;
-  status: string;
+  status: LeadStatus;
   created_at: string;
   updated_at: string;
   emails: LeadEmail[];
@@ -55,7 +61,7 @@ export interface ScrapeJob {
   source: string;
   keywords: string | null;
   location_filter: string | null;
-  status: string;
+  status: JobStatus;
   triggered_by: string;
   total_pages: number | null;
   pages_scraped: number;

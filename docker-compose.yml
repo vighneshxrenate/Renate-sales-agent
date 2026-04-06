@@ -33,7 +33,7 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://renate:${DB_PASSWORD:-changeme}@db:5432/renate_sales
-      PLAYWRIGHT_WS_ENDPOINT: ws://playwright-browser:3000
+      PLAYWRIGHT_WS_ENDPOINT: ws://playwright-browser:3000/ws
     ports:
       - "8000:8000"
     depends_on:
@@ -42,7 +42,7 @@ services:
       playwright-browser:
         condition: service_started
     command: >
-      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --reload"
+      sh -c "cd /srv && alembic upgrade head && uvicorn app.main:server --host 0.0.0.0 --port 8000 --workers 1 --reload"
 
   frontend:
     build:
