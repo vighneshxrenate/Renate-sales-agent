@@ -1,0 +1,6 @@
+- [User Profile](user_profile.md) — AI engineer, senior-level, prefers direct concise production code
+- [No Anthropic](feedback_no_anthropic.md) — Use OpenAI GPT-4o-mini, not Claude API, for cost
+- [Enrichment Stack](feedback_enrichment.md) — Apollo (primary) + Hunter (secondary) + free fallbacks for email/phone
+- [Project Status](project_status.md) — Scraping + enrichment pipeline working, pushed to feature/rishi-work
+- [No Plan Agents](feedback_plan_agents.md) — Write plans directly, don't spawn Plan subagents
+- [Session Log](session_2026_04_02_06.md) — Full session history: Docker setup → scraping → enrichment → phone validation
